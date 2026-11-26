@@ -26,7 +26,7 @@
 const SUPABASE_URL='https://jaoueawywpeucsgehcer.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_AvDzHs6s6KgGfgTTWbmogQ_FGvkmwgS';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let currentUser=null,authMode='login',projects=[];
+let currentUser=null,authMode='login',projects=[],currentRole='member';
 const moduleInfo={
 drama:['🎬','Studio Drama','Konsep, script, karakter, outfit, lokasi, scene, storyboard, dan prompt.'],
 video:['▶️','Studio Video','Nyanyi & joget, drama, character replacement, UGC, product ads, cinematic, talking character, stop motion.'],
@@ -46,7 +46,13 @@ function updateAccount(){document.getElementById('userEmail').textContent=curren
 function openAuth(){document.getElementById('authMessage').textContent='';document.getElementById('authModal').style.display='flex'}
 function setAuthMode(mode){authMode=mode;document.getElementById('loginTab').classList.toggle('active',mode==='login');document.getElementById('signupTab').classList.toggle('active',mode==='signup');document.getElementById('authTitle').textContent=mode==='login'?'Masuk ke Motionkan Studio':'Buat akun Motionkan Studio';document.getElementById('authDesc').textContent=mode==='login'?'Login untuk membuka proyek dari cloud.':'Daftar dengan email dan password untuk mulai menyimpan proyek.';document.getElementById('submitAuth').textContent=mode==='login'?'Login':'Daftar'}
 async function submitAuth(){const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;const msg=document.getElementById('authMessage');if(!email||!password){msg.textContent='Isi email dan password terlebih dahulu.';return}if(password.length<6){msg.textContent='Password minimal 6 karakter.';return}const btn=document.getElementById('submitAuth');btn.disabled=true;msg.textContent='Memproses...';try{if(authMode==='signup'){const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin}});if(error)throw error;if(data.session){currentUser=data.user;document.getElementById('authModal').style.display='none';await afterAuth();toast('Akun berhasil dibuat dan login.')}else{msg.textContent='Pendaftaran diterima. Silakan cek email untuk konfirmasi, lalu login.'}}else{const {data,error}=await db.auth.signInWithPassword({email,password});if(error)throw error;currentUser=data.user;document.getElementById('authModal').style.display='none';await afterAuth();toast('Berhasil login. Proyek cloud dimuat.')}}catch(e){msg.textContent=e.message||'Terjadi kesalahan.'}finally{btn.disabled=false}}
-async function afterAuth(){await loadProjects();updateAccount();render('home')}
+async function afterAuth(){
+  const {data,error}=await db.from('user_roles').select('role').eq('user_id',currentUser.id).maybeSingle();
+  currentRole=data?.role||'member';
+  await loadProjects();
+  updateAccount();
+  render('home');
+}
 async function logout(){await db.auth.signOut();currentUser=null;projects=[];updateAccount();render('home');toast('Sudah logout.')}
 async function saveProject(){if(!currentUser){openAuth();return}const name=document.getElementById('projectName').value.trim();if(!name){toast('Masukkan nama proyek terlebih dahulu.');return}const btn=document.getElementById('saveProject');btn.disabled=true;try{const payload={user_id:currentUser.id,name,project_type:document.getElementById('projectType').value,visual_style:document.getElementById('projectStyle').value,project_data:{}};const {data,error}=await db.from('projects').insert(payload).select('id,name,project_type,visual_style,created_at').single();if(error)throw error;projects.unshift(data);document.getElementById('projectModal').style.display='none';document.getElementById('projectName').value='';render('home');toast('Berhasil! Proyek tersimpan di Supabase Cloud.')}catch(e){toast('Belum berhasil menyimpan: '+e.message)}finally{btn.disabled=false}}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.style.display='none',4000)}
